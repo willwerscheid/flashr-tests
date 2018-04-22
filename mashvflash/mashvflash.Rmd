@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE, echo=F}
-library(flashr)
+devtools::load_all("/Users/willwerscheid/GitHub/flashr2")
 library(mashr)
 library(MASS)
 options(digits=2)
@@ -14,7 +14,8 @@ set.seed(1)
 
 # FLASH v MASH ------------------------------------------------------
 flash_v_mash <- function(Y, true_Y, nfactors) {
-  fl <- fit_flash(Y, nfactors)
+  data <- flash_set_data(Y, S = 1)
+  fl <- fit_flash(data, nfactors)
   m <- fit_mash(Y)
 
   # Sample from FLASH fit
@@ -46,12 +47,11 @@ plot_res <- function(res) {
 
 
 # Fit using FLASH ---------------------------------------------------
-fit_flash <- function(Y, nfactors) {
-  p <- ncol(Y)
-  fl <- flash_add_fixed_f(Y, diag(rep(1, p)))
-  fl <- flash_backfit(Y, fl, var_type="constant", nullcheck=F)
-  fl <- flash_add_greedy(Y, nfactors, fl, var_type="constant")
-  flash_backfit(Y, fl, var_type="constant", nullcheck=F)
+fit_flash <- function(data, nfactors) {
+  p <- ncol(data$Y)
+  fl <- flash_add_greedy(data, nfactors)
+  fl <- flash_add_fixed_f(data, diag(rep(1, p)), fl)
+  flash_backfit(data, fl, nullcheck=F)
 }
 
 # Fit using MASH ---------------------------------------------------
@@ -159,6 +159,7 @@ mash_lfsr <- function(m, true_Y, step=0.05) {
 # Simulate from FLASH model -----------------------------------------
 n <- 1000
 p <- 10
+flash_factors <- 10
 
 # Use one factor of all ones and one more interesting factor
 nfactors <- 2
@@ -171,7 +172,7 @@ ll <- matrix(rnorm(n * k), nrow=n, ncol=k)
 true_flash_Y <- ll %*% ff
 flash_Y <- true_flash_Y + rnorm(n*p)
 # RESULTS
-flash_res <- flash_v_mash(flash_Y, true_flash_Y, nfactors)
+flash_res <- flash_v_mash(flash_Y, true_flash_Y, flash_factors)
 
 # Simulate from basic FLASH model -----------------------------------
 ff <- ff[1:nfactors, ]
@@ -179,7 +180,7 @@ ll <- matrix(rnorm(n * nfactors), nrow=n, ncol=nfactors)
 true_basic_Y <- ll %*% ff
 basic_Y <- true_basic_Y + rnorm(n*p)
 # RESULTS
-basic_res <- flash_v_mash(basic_Y, true_basic_Y, nfactors)
+basic_res <- flash_v_mash(basic_Y, true_basic_Y, flash_factors)
 
 # Simulate from MASH model ------------------------------------------
 Sigma <- list()
@@ -201,12 +202,12 @@ for (i in 1:n) {
 }
 mash_Y <- true_mash_Y + rnorm(n * p)
 # RESULTS
-mash_res <- flash_v_mash(mash_Y, true_mash_Y, nfactors)
+mash_res <- flash_v_mash(mash_Y, true_mash_Y, flash_factors)
 ```
 
-In each case below, I follow the vignettes to produce a MASH fit (I use both canonical and data-driven covariance matrices). I fit a FLASH object by adding $p$ fixed one-hot vectors and backfitting, then adding two more factors (greedily) and backfitting.
+In each case below, I follow the vignettes to produce a MASH fit (I use both canonical and data-driven covariance matrices). I fit a FLASH object (fixing the standard errors) by adding up to 10 factors greedily, then adding $p$ fixed one-hot vectors, and finally backfitting.
 
-The two fits perform about the same on data generated from the FLASH model. The MASH fit does better on data generated from the MASH model; more surprisingly, it does much better on data generated from the "augmented FLASH model" (described below).
+The two fits perform similarly. The MASH fit does better on data generated from the MASH model; more surprisingly, it performs comparably to FLASH on data generated from both the standard two-factor FLASH model and the "augmented FLASH model" (described below).
 
 ## Flash Model
 
@@ -216,7 +217,7 @@ First I simulate from the basic FLASH model $Y = LF + E$ with $E_{ij} \sim N(0, 
 ff
 ```
 
-The MSE of the FLASH fit is `r basic_res$fl_mse`, vs. `r basic_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value $LF_{ij}$ is `r basic_res$fl_ci` for FLASH and `r basic_res$m_ci` for MASH. The true false sign rate vs lfsr appears as follows:
+**The MSE of the FLASH fit is `r basic_res$fl_mse`, vs. `r basic_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value $LF_{ij}$ is `r basic_res$fl_ci` for FLASH and `r basic_res$m_ci` for MASH.** The true false sign rate vs lfsr appears as follows:
 
 ```{r lfsr1, echo=F}
 plot_res(basic_res)
@@ -225,10 +226,10 @@ plot_res(basic_res)
 ## Augmented Flash Model
 
 Next I simulate from the "augmented" FLASH model
-$$ Y = L \begin{pmatrix} F \\ I_{10} \end{pmatrix} + E $$
+$$ Y = L \begin{pmatrix} F \\ 3I_{10} \end{pmatrix} + E $$
 with $F$ as above.
 
-The MSE of the FLASH fit is `r flash_res$fl_mse`, vs. `r flash_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value is `r flash_res$fl_ci` for FLASH and `r flash_res$m_ci` for MASH. The true false sign rate vs lfsr appears as follows:
+**The MSE of the FLASH fit is `r flash_res$fl_mse`, vs. `r flash_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value is `r flash_res$fl_ci` for FLASH and `r flash_res$m_ci` for MASH.** The true false sign rate vs lfsr appears as follows:
 
 ```{r lfsr2, echo=F}
 plot_res(flash_res)
@@ -240,7 +241,7 @@ Finally I simulate from the MASH model
 $$ X \sim \sum \pi_i N(0, \Sigma_i),\ Y = X + E $$
 with $E_{ij} \sim N(0, 1)$. I set $\Sigma_1$ to be the all ones matrix, $\Sigma_2$ to be a banded covariance matrix with non-zero entries on the first three off-diagonals, and $\Sigma_3$ through $\Sigma_{12}$ to have a single non-zero entry (corresponding to tissue-specific effects). $\pi$ is set to $(0.3, 0.3, 0.04, 0.04, \ldots, 0.04)$.
 
-The MSE of the FLASH fit is `r mash_res$fl_mse`, vs. `r mash_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value is `r mash_res$fl_ci` for FLASH and `r mash_res$m_ci` for MASH. The true false sign rate vs lfsr appears as follows:
+**The MSE of the FLASH fit is `r mash_res$fl_mse`, vs. `r mash_res$m_mse` for the MASH fit. The proportion of 95% confidence intervals that contain the true value is `r mash_res$fl_ci` for FLASH and `r mash_res$m_ci` for MASH.** The true false sign rate vs lfsr appears as follows:
 
 ```{r lfsr3, echo=F}
 plot_res(mash_res)
