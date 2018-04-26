@@ -49,9 +49,9 @@ plot_res <- function(res) {
 # Fit using FLASH ---------------------------------------------------
 fit_flash <- function(data, nfactors) {
   p <- ncol(data$Y)
-  fl <- flash_add_greedy(data, nfactors)
+  fl <- flash_add_greedy(data, nfactors, var_type = "zero")
   fl <- flash_add_fixed_f(data, diag(rep(1, p)), fl)
-  flash_backfit(data, fl, nullcheck=F)
+  flash_backfit(data, fl, nullcheck = F, var_type = "zero")
 }
 
 # Fit using MASH ---------------------------------------------------
@@ -159,7 +159,7 @@ mash_lfsr <- function(m, true_Y, step=0.05) {
 # Simulate from FLASH model -----------------------------------------
 n <- 1000
 p <- 10
-flash_factors <- 10
+flash_factors <- 5
 
 # Use one factor of all ones and one more interesting factor
 nfactors <- 2
@@ -207,7 +207,7 @@ mash_res <- flash_v_mash(mash_Y, true_mash_Y, flash_factors)
 
 In each case below, I follow the vignettes to produce a MASH fit (I use both canonical and data-driven covariance matrices). I fit a FLASH object (fixing the standard errors) by adding up to 10 factors greedily, then adding $p$ fixed one-hot vectors, and finally backfitting.
 
-The two fits perform similarly. The MASH fit does better on data generated from the MASH model; more surprisingly, it performs comparably to FLASH on data generated from both the standard two-factor FLASH model and the "augmented FLASH model" (described below).
+The two fits perform similarly. The MASH fit does somewhat better on data generated from the MASH model; more surprisingly, it performs comparably to FLASH on data generated from both the standard two-factor FLASH model. Both do poorly on the "augmented FLASH model" (described below), with MSEs near 1 (which would be obtained by simply using $Y$ as an estimate).
 
 ## Flash Model
 
